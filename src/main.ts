@@ -10,6 +10,14 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // ─── CORS — allow Next.js frontend ──────────────────────────────────────────
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  });
+
   // ─── Static assets ──────────────────────────────────────────────────────────
   app.useStaticAssets(join(process.cwd(), 'public'));
 
