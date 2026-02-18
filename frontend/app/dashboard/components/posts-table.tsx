@@ -8,7 +8,6 @@ import { CreatePostForm } from "./create-post-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -28,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ImageUploader } from "@/components/dashboard/image-uploader";
 import { Eye, Loader2, Pencil, Trash2, X, Check, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -36,9 +36,16 @@ interface Props {
   userRole: UserRole;
 }
 
+/** Per-post edit image state so each inline form has its own uploader values. */
+interface EditImageState {
+  url: string;
+  alt: string;
+}
+
 export function PostsTable({ initialPosts, userRole }: Props) {
   const [posts, setPosts] = useState<BlogPost[]>(initialPosts);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editImage, setEditImage] = useState<EditImageState>({ url: "", alt: "" });
   const [loading, setLoading] = useState(false);
 
   const refreshPosts = useCallback(async () => {
@@ -51,6 +58,14 @@ export function PostsTable({ initialPosts, userRole }: Props) {
       /* ignore */
     }
   }, []);
+
+  const startEditing = (post: BlogPost) => {
+    setEditingId(post.id);
+    setEditImage({
+      url: post.featuredImageUrl || "",
+      alt: post.featuredImageAlt || "",
+    });
+  };
 
   const handleDelete = async (id: string) => {
     setLoading(true);
@@ -81,8 +96,9 @@ export function PostsTable({ initialPosts, userRole }: Props) {
       isFeatured: fd.get("isFeatured") === "true",
       categories: fd.get("categories") || undefined,
       tags: fd.get("tags") || undefined,
-      featuredImageUrl: fd.get("featuredImageUrl") || undefined,
-      featuredImageAlt: fd.get("featuredImageAlt") || undefined,
+      // Image comes from controlled ImageUploader state
+      featuredImageUrl: editImage.url || undefined,
+      featuredImageAlt: editImage.alt || undefined,
     };
     setLoading(true);
     try {
@@ -179,10 +195,15 @@ export function PostsTable({ initialPosts, userRole }: Props) {
                     <Input name="categories" defaultValue={post.categories.join(",")} placeholder="Categories" />
                     <Input name="tags" defaultValue={post.tags.join(",")} placeholder="Tags" />
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input name="featuredImageUrl" defaultValue={post.featuredImageUrl || ""} placeholder="Image URL" />
-                    <Input name="featuredImageAlt" defaultValue={post.featuredImageAlt || ""} placeholder="Image Alt" />
-                  </div>
+
+                  {/* ── Image upload (replaces the old URL text inputs) ── */}
+                  <ImageUploader
+                    value={editImage.url}
+                    onChange={(url) => setEditImage((prev) => ({ ...prev, url }))}
+                    altValue={editImage.alt}
+                    onAltChange={(alt) => setEditImage((prev) => ({ ...prev, alt }))}
+                    label="Featured Image"
+                  />
 
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>
@@ -197,7 +218,7 @@ export function PostsTable({ initialPosts, userRole }: Props) {
               ) : (
                 /* ── Post card view ─────────────────────────────────────── */
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link
                         href={`/blog/${post.slug}`}
@@ -240,6 +261,16 @@ export function PostsTable({ initialPosts, userRole }: Props) {
                         <Badge key={t} variant="outline" className="text-xs">#{t}</Badge>
                       ))}
                     </div>
+
+                    {/* Thumbnail if image exists */}
+                    {post.featuredImageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={post.featuredImageUrl}
+                        alt={post.featuredImageAlt || ""}
+                        className="mt-2 h-16 w-28 rounded-md object-cover border"
+                      />
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -249,7 +280,7 @@ export function PostsTable({ initialPosts, userRole }: Props) {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setEditingId(post.id)}
+                          onClick={() => startEditing(post)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>

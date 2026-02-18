@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageUploader } from "@/components/dashboard/image-uploader";
 import { Loader2, PlusCircle } from "lucide-react";
 import { PostStatus, ContentFormat, UserRole } from "@/lib/types";
 
@@ -30,6 +31,10 @@ export function CreatePostForm({ userRole, onCreated }: Props) {
   );
   const [isFeatured, setIsFeatured] = useState("false");
 
+  // Controlled image state (ImageUploader is not a native input element)
+  const [featuredImageUrl, setFeaturedImageUrl] = useState("");
+  const [featuredImageAlt, setFeaturedImageAlt] = useState("");
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -43,8 +48,9 @@ export function CreatePostForm({ userRole, onCreated }: Props) {
       isFeatured: isFeatured === "true",
       categories: fd.get("categories") || undefined,
       tags: fd.get("tags") || undefined,
-      featuredImageUrl: fd.get("featuredImageUrl") || undefined,
-      featuredImageAlt: fd.get("featuredImageAlt") || undefined,
+      // image values come from controlled state, not FormData
+      featuredImageUrl: featuredImageUrl || undefined,
+      featuredImageAlt: featuredImageAlt || undefined,
     };
 
     setLoading(true);
@@ -55,6 +61,9 @@ export function CreatePostForm({ userRole, onCreated }: Props) {
       });
       toast.success("Post created!");
       (e.target as HTMLFormElement).reset();
+      // Reset controlled image state
+      setFeaturedImageUrl("");
+      setFeaturedImageAlt("");
       onCreated();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to create post");
@@ -174,20 +183,14 @@ export function CreatePostForm({ userRole, onCreated }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="cp-imgurl">Featured Image URL</Label>
-          <Input
-            id="cp-imgurl"
-            name="featuredImageUrl"
-            placeholder="https://…"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cp-imgalt">Image Alt Text</Label>
-          <Input id="cp-imgalt" name="featuredImageAlt" placeholder="Alt text" />
-        </div>
-      </div>
+      {/* ── Featured image upload ─────────────────────────────────────────── */}
+      <ImageUploader
+        value={featuredImageUrl}
+        onChange={setFeaturedImageUrl}
+        altValue={featuredImageAlt}
+        onAltChange={setFeaturedImageAlt}
+        label="Featured Image"
+      />
 
       <div className="flex justify-end">
         <Button type="submit" disabled={loading}>
