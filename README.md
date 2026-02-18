@@ -25,7 +25,7 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-## Project init
+## Backend init
 
 ```bash
 # 1. Set up PostgreSQL and fill in .env
@@ -42,7 +42,7 @@ npm run seed:admin
 npm run seed:posts
 ```
 
-## Compile and run the project
+## Compile and run Backend
 
 ```bash
 # development
@@ -55,7 +55,7 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-## Run tests
+## Run tests in Backend
 
 ```bash
 # unit tests
