@@ -3,19 +3,11 @@
 import { useState, useCallback } from "react";
 import { clientFetch } from "@/lib/api";
 import { toast } from "sonner";
-import { BlogPost, PostStatus, ContentFormat, UserRole } from "@/lib/types";
-import { CreatePostForm } from "./create-post-form";
+import { BlogPost, PostStatus, UserRole } from "@/lib/types";
+import { PostSheet } from "./post-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +19,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ImageUploader } from "@/components/dashboard/image-uploader";
-import { Eye, Loader2, Pencil, Trash2, X, Check, ExternalLink } from "lucide-react";
+import {
+  Eye,
+  Loader2,
+  Pencil,
+  Trash2,
+  PlusCircle,
+  ExternalLink,
+  Star,
+  Search,
+} from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -36,17 +36,30 @@ interface Props {
   userRole: UserRole;
 }
 
-/** Per-post edit image state so each inline form has its own uploader values. */
-interface EditImageState {
-  url: string;
-  alt: string;
-}
+const statusMeta: Record<PostStatus, { label: string; dot: string; row: string }> = {
+  [PostStatus.PUBLISHED]: {
+    label: "Published",
+    dot: "bg-emerald-500",
+    row: "border-l-emerald-400",
+  },
+  [PostStatus.DRAFT]: {
+    label: "Draft",
+    dot: "bg-zinc-400",
+    row: "border-l-zinc-300",
+  },
+  [PostStatus.ARCHIVED]: {
+    label: "Archived",
+    dot: "bg-amber-400",
+    row: "border-l-amber-400",
+  },
+};
 
 export function PostsTable({ initialPosts, userRole }: Props) {
   const [posts, setPosts] = useState<BlogPost[]>(initialPosts);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editImage, setEditImage] = useState<EditImageState>({ url: "", alt: "" });
-  const [loading, setLoading] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const refreshPosts = useCallback(async () => {
     try {
@@ -59,16 +72,18 @@ export function PostsTable({ initialPosts, userRole }: Props) {
     }
   }, []);
 
-  const startEditing = (post: BlogPost) => {
-    setEditingId(post.id);
-    setEditImage({
-      url: post.featuredImageUrl || "",
-      alt: post.featuredImageAlt || "",
-    });
+  const openCreate = () => {
+    setEditingPost(null);
+    setSheetOpen(true);
+  };
+
+  const openEdit = (post: BlogPost) => {
+    setEditingPost(post);
+    setSheetOpen(true);
   };
 
   const handleDelete = async (id: string) => {
-    setLoading(true);
+    setDeletingId(id);
     try {
       await clientFetch(`/blog-posts/${id}`, { method: "DELETE" });
       toast.success("Post deleted.");
@@ -76,249 +91,203 @@ export function PostsTable({ initialPosts, userRole }: Props) {
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
-  const handleUpdate = async (
-    e: React.FormEvent<HTMLFormElement>,
-    id: string
-  ) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const body: Record<string, unknown> = {
-      title: fd.get("title"),
-      slug: fd.get("slug") || undefined,
-      excerpt: fd.get("excerpt") || undefined,
-      content: fd.get("content"),
-      contentFormat: fd.get("contentFormat"),
-      status: fd.get("status"),
-      isFeatured: fd.get("isFeatured") === "true",
-      categories: fd.get("categories") || undefined,
-      tags: fd.get("tags") || undefined,
-      // Image comes from controlled ImageUploader state
-      featuredImageUrl: editImage.url || undefined,
-      featuredImageAlt: editImage.alt || undefined,
-    };
-    setLoading(true);
-    try {
-      await clientFetch(`/blog-posts/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      toast.success("Post updated!");
-      setEditingId(null);
-      await refreshPosts();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Update failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const canEdit = userRole === UserRole.ADMIN;
+  const canCreate = userRole === UserRole.ADMIN || userRole === UserRole.MANAGER;
 
-  const statusColor: Record<PostStatus, string> = {
-    [PostStatus.PUBLISHED]: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    [PostStatus.DRAFT]: "bg-zinc-100 text-zinc-700 border-zinc-200",
-    [PostStatus.ARCHIVED]: "bg-amber-100 text-amber-800 border-amber-200",
-  };
+  const filtered = search.trim()
+    ? posts.filter(
+        (p) =>
+          p.title.toLowerCase().includes(search.toLowerCase()) ||
+          p.slug.toLowerCase().includes(search.toLowerCase())
+      )
+    : posts;
 
   return (
-    <div className="space-y-4">
-      {/* Create form for ADMIN/MANAGER */}
-      {(userRole === UserRole.ADMIN || userRole === UserRole.MANAGER) && (
-        <CreatePostForm userRole={userRole} onCreated={refreshPosts} />
-      )}
+    <>
+      {/* ── Toolbar ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search posts…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-8 w-56 text-sm"
+          />
+        </div>
+        {canCreate && (
+          <Button size="sm" onClick={openCreate} className="gap-1.5">
+            <PlusCircle className="h-4 w-4" />
+            New Post
+          </Button>
+        )}
+      </div>
 
-      {/* Posts list */}
-      {posts.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No posts yet.
+      {/* ── Posts list ────────────────────────────────────────────────────── */}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          {search
+            ? "No posts match your search."
+            : "No posts yet. Create your first post!"}
         </div>
       ) : (
-        <div className="space-y-3">
-          {posts.map((post) => (
-            <article
-              key={post.id}
-              className="rounded-xl border bg-card p-4 shadow-sm"
-            >
-              {editingId === post.id && userRole === UserRole.ADMIN ? (
-                /* ── Edit form ─────────────────────────────────────────── */
-                <form
-                  onSubmit={(e) => handleUpdate(e, post.id)}
-                  className="space-y-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm">Editing post</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingId(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input name="title" defaultValue={post.title} required placeholder="Title" />
-                    <Input name="slug" defaultValue={post.slug} placeholder="Slug" />
-                  </div>
-                  <Textarea name="excerpt" defaultValue={post.excerpt} placeholder="Excerpt" rows={2} />
-                  <Textarea name="content" defaultValue={post.content} placeholder="Content" rows={6} required />
-
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <Select name="contentFormat" defaultValue={post.contentFormat}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ContentFormat.MARKDOWN}>Markdown</SelectItem>
-                        <SelectItem value={ContentFormat.HTML}>HTML</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select name="status" defaultValue={post.status}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={PostStatus.DRAFT}>Draft</SelectItem>
-                        <SelectItem value={PostStatus.PUBLISHED}>Published</SelectItem>
-                        <SelectItem value={PostStatus.ARCHIVED}>Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select name="isFeatured" defaultValue={String(post.isFeatured)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="false">Not featured</SelectItem>
-                        <SelectItem value="true">Featured</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input name="categories" defaultValue={post.categories.join(",")} placeholder="Categories" />
-                    <Input name="tags" defaultValue={post.tags.join(",")} placeholder="Tags" />
-                  </div>
-
-                  {/* ── Image upload (replaces the old URL text inputs) ── */}
-                  <ImageUploader
-                    value={editImage.url}
-                    onChange={(url) => setEditImage((prev) => ({ ...prev, url }))}
-                    altValue={editImage.alt}
-                    onAltChange={(alt) => setEditImage((prev) => ({ ...prev, alt }))}
-                    label="Featured Image"
+        <div className="rounded-xl border overflow-hidden divide-y">
+          {filtered.map((post) => {
+            const meta = statusMeta[post.status];
+            return (
+              <div
+                key={post.id}
+                className={`flex items-start gap-3 px-4 py-3.5 border-l-4 bg-card hover:bg-muted/30 transition-colors ${meta.row}`}
+              >
+                {/* Thumbnail */}
+                {post.featuredImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={post.featuredImageUrl}
+                    alt={post.featuredImageAlt || ""}
+                    className="h-12 w-20 rounded-md object-cover shrink-0 border hidden sm:block"
                   />
-
-                  <div className="flex gap-2 justify-end">
-                    <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={loading}>
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <Check className="mr-1 h-4 w-4" /> Save
-                    </Button>
+                ) : (
+                  <div className="h-12 w-20 rounded-md bg-muted shrink-0 hidden sm:flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground/50">No img</span>
                   </div>
-                </form>
-              ) : (
-                /* ── Post card view ─────────────────────────────────────── */
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Link
-                        href={`/blog/${post.slug}`}
-                        className="font-semibold hover:text-primary transition-colors"
-                        target="_blank"
-                      >
-                        {post.title}
-                        <ExternalLink className="inline-block ml-1 h-3 w-3" />
-                      </Link>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
+                )}
+
+                {/* Main content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                    <span
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${meta.dot}`}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {meta.label}
+                    </span>
+                    {post.isFeatured && (
+                      <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                    )}
+                  </div>
+
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    target="_blank"
+                    className="font-semibold text-sm hover:text-primary transition-colors line-clamp-1"
+                  >
+                    {post.title}
+                    <ExternalLink className="inline-block ml-1 h-2.5 w-2.5 opacity-50" />
+                  </Link>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground font-mono">
                       /{post.slug}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor[post.status]}`}>
-                        {post.status}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Eye className="h-3 w-3" /> {post.views.toLocaleString()}
+                    </span>
+                    {post.author && (
+                      <span className="text-xs text-muted-foreground">
+                        {post.author.name || post.author.email}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-                        <Eye className="h-3 w-3" /> {post.views.toLocaleString()}
-                      </span>
-                      {post.isFeatured && (
-                        <Badge variant="secondary" className="text-xs">⭐ featured</Badge>
-                      )}
-                      {post.author && (
+                    )}
+                  </div>
+
+                  {(post.categories.length > 0 || post.tags.length > 0) && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {post.categories.map((c) => (
+                        <Badge
+                          key={c}
+                          variant="secondary"
+                          className="text-xs h-4 px-1.5"
+                        >
+                          {c}
+                        </Badge>
+                      ))}
+                      {post.tags.slice(0, 3).map((t) => (
+                        <Badge
+                          key={t}
+                          variant="outline"
+                          className="text-xs h-4 px-1.5"
+                        >
+                          #{t}
+                        </Badge>
+                      ))}
+                      {post.tags.length > 3 && (
                         <span className="text-xs text-muted-foreground">
-                          by {post.author.name || post.author.email}
+                          +{post.tags.length - 3}
                         </span>
                       )}
                     </div>
-                    {post.excerpt && (
-                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                        {post.excerpt}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {post.categories.map((c) => (
-                        <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
-                      ))}
-                      {post.tags.map((t) => (
-                        <Badge key={t} variant="outline" className="text-xs">#{t}</Badge>
-                      ))}
-                    </div>
-
-                    {/* Thumbnail if image exists */}
-                    {post.featuredImageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={post.featuredImageUrl}
-                        alt={post.featuredImageAlt || ""}
-                        className="mt-2 h-16 w-28 rounded-md object-cover border"
-                      />
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 shrink-0">
-                    {userRole === UserRole.ADMIN && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => startEditing(post)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/5">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete post?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                &quot;{post.title}&quot; will be permanently deleted.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={() => handleDelete(post.id)}
-                                disabled={loading}
-                              >
-                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </>
-                    )}
-                  </div>
+                  )}
                 </div>
-              )}
-            </article>
-          ))}
+
+                {/* Date */}
+                <span className="text-xs text-muted-foreground shrink-0 hidden md:block">
+                  {new Date(post.updatedAt).toLocaleDateString()}
+                </span>
+
+                {/* Actions */}
+                {canEdit && (
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => openEdit(post)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete post?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            &quot;{post.title}&quot; will be permanently deleted.
+                            This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => handleDelete(post.id)}
+                            disabled={deletingId === post.id}
+                          >
+                            {deletingId === post.id && (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
-    </div>
+
+      {/* ── Post create/edit sheet ─────────────────────────────────────────── */}
+      <PostSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        post={editingPost}
+        userRole={userRole}
+        onSuccess={refreshPosts}
+      />
+    </>
   );
 }

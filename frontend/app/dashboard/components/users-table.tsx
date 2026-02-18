@@ -7,6 +7,7 @@ import { User, UserRole } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,55 +15,78 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Pencil, X, Check } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Loader2, Pencil, Check, Users2 } from "lucide-react";
 
 interface Props {
   initialUsers: User[];
 }
 
-const roleColor: Record<UserRole, string> = {
-  [UserRole.ADMIN]: "bg-red-100 text-red-800 border-red-200",
-  [UserRole.MANAGER]: "bg-amber-100 text-amber-800 border-amber-200",
-  [UserRole.MEMBER]: "bg-blue-100 text-blue-700 border-blue-200",
+const roleMeta: Record<UserRole, { label: string; classes: string }> = {
+  [UserRole.ADMIN]: {
+    label: "Admin",
+    classes: "bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-300",
+  },
+  [UserRole.MANAGER]: {
+    label: "Manager",
+    classes: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300",
+  },
+  [UserRole.MEMBER]: {
+    label: "Member",
+    classes: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300",
+  },
 };
+
+function Avatar({ name, email }: { name?: string; email: string }) {
+  const letter = (name || email).charAt(0).toUpperCase();
+  return (
+    <div className="h-9 w-9 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary select-none">
+      {letter}
+    </div>
+  );
+}
 
 export function UsersTable({ initialUsers }: Props) {
   const [users, setUsers] = useState<User[]>(initialUsers);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<UserRole>(UserRole.MEMBER);
   const [loading, setLoading] = useState(false);
 
-  const startEdit = (user: User) => {
-    setEditingId(user.id);
+  const openEdit = (user: User) => {
+    setEditingUser(user);
     setEditName(user.name || "");
     setEditRole(user.role);
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-  };
+  const closeEdit = () => setEditingUser(null);
 
-  const handleUpdate = async (user: User) => {
+  const handleUpdate = async () => {
+    if (!editingUser) return;
     setLoading(true);
     try {
-      // Update name if changed
-      let updated = user;
-      if (editName !== (user.name || "")) {
+      let updated = editingUser;
+
+      if (editName.trim() !== (editingUser.name || "")) {
         const res = await clientFetch<{ success: boolean; user: User }>(
-          `/users/${user.id}`,
+          `/users/${editingUser.id}`,
           {
             method: "PATCH",
-            body: JSON.stringify({ name: editName || undefined }),
+            body: JSON.stringify({ name: editName.trim() || undefined }),
           }
         );
         updated = res.user;
       }
 
-      // Update role if changed
-      if (editRole !== user.role) {
+      if (editRole !== editingUser.role) {
         const res = await clientFetch<{ success: boolean; user: User }>(
-          `/users/${user.id}/role`,
+          `/users/${editingUser.id}/role`,
           {
             method: "PATCH",
             body: JSON.stringify({ role: editRole }),
@@ -72,8 +96,10 @@ export function UsersTable({ initialUsers }: Props) {
       }
 
       toast.success("User updated.");
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
-      setEditingId(null);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === editingUser.id ? updated : u))
+      );
+      closeEdit();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -81,111 +107,156 @@ export function UsersTable({ initialUsers }: Props) {
     }
   };
 
+  if (users.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+        No users found.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-2">
-      {users.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No users found.
-        </div>
-      ) : (
-        users.map((user) => (
-          <div
-            key={user.id}
-            className="rounded-xl border bg-card p-4 shadow-sm flex flex-wrap items-center gap-3"
-          >
-            {editingId === user.id ? (
-              /* ── Edit row ─────────────────────────────────────────────── */
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                <Input
-                  className="h-8 w-40"
-                  placeholder="Name"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                />
-                <Select
-                  value={editRole}
-                  onValueChange={(v) => setEditRole(v as UserRole)}
-                >
-                  <SelectTrigger className="h-8 w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UserRole.MEMBER}>MEMBER</SelectItem>
-                    <SelectItem value={UserRole.MANAGER}>MANAGER</SelectItem>
-                    <SelectItem value={UserRole.ADMIN}>ADMIN</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    onClick={() => handleUpdate(user)}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="h-4 w-4" />
+    <>
+      <div className="rounded-xl border overflow-hidden divide-y">
+        {users.map((user) => {
+          const role = roleMeta[user.role];
+          return (
+            <div
+              key={user.id}
+              className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/30 transition-colors"
+            >
+              <Avatar name={user.name} email={user.email} />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium truncate">
+                    {user.name || (
+                      <span className="italic text-muted-foreground">
+                        No name
+                      </span>
                     )}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              /* ── View row ─────────────────────────────────────────────── */
-              <>
-                <div className="flex flex-1 flex-wrap items-center gap-3 min-w-0">
-                  {/* Avatar placeholder */}
-                  <div className="h-8 w-8 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold uppercase">
-                    {(user.name || user.email).charAt(0)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">
-                      {user.name ?? (
-                        <span className="italic text-muted-foreground">
-                          No name
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user.email}
-                    </p>
-                  </div>
-
+                  </p>
                   <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleColor[user.role]}`}
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${role.classes}`}
                   >
-                    {user.role}
+                    {role.label}
                   </span>
-
                   {!user.isActive && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs text-muted-foreground"
-                    >
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
                       Inactive
                     </Badge>
                   )}
-
-                  <p className="text-xs text-muted-foreground shrink-0">
-                    Joined {new Date(user.createdAt).toLocaleDateString()}
-                  </p>
                 </div>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user.email}
+                </p>
+              </div>
 
-                {/* Actions */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => startEdit(user)}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+              <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+                {new Date(user.createdAt).toLocaleDateString()}
+              </span>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 shrink-0"
+                onClick={() => openEdit(user)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Edit sheet ───────────────────────────────────────────────────── */}
+      <Sheet open={!!editingUser} onOpenChange={(o) => !o && closeEdit()}>
+        <SheetContent side="right" className="sm:max-w-sm">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Users2 className="h-4 w-4 text-muted-foreground" />
+              Edit User
+            </SheetTitle>
+            <SheetDescription>{editingUser?.email}</SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4 px-1">
+            {/* Avatar preview */}
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-semibold text-primary">
+                {(editName || editingUser?.email || "?").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{editName || "No name"}</p>
+                <p className="text-xs text-muted-foreground">{editingUser?.email}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="eu-name">Display name</Label>
+              <Input
+                id="eu-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Full name"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select
+                value={editRole}
+                onValueChange={(v) => setEditRole(v as UserRole)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UserRole.MEMBER}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                      Member
+                    </span>
+                  </SelectItem>
+                  <SelectItem value={UserRole.MANAGER}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-500" />
+                      Manager
+                    </span>
+                  </SelectItem>
+                  <SelectItem value={UserRole.ADMIN}>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Admin
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {editRole === UserRole.ADMIN
+                  ? "Full access: create, edit, delete posts and manage users."
+                  : editRole === UserRole.MANAGER
+                  ? "Can create posts (saved as draft for review)."
+                  : "Read-only access to the dashboard."}
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={closeEdit} disabled={loading}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleUpdate} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </div>
           </div>
-        ))
-      )}
-    </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
