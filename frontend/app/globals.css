@@ -5,7 +5,7 @@
 
 @custom-variant dark (&:is(.dark *));
  
- :root {
+:root {
   --background: oklch(1.0000 0 0);
   --foreground: oklch(0 0 0);
   --card: oklch(1.0000 0 0);
@@ -14,8 +14,8 @@
   --popover-foreground: oklch(0 0 0);
   --primary: oklch(0.5323 0.1730 141.3064);
   --primary-foreground: oklch(1.0000 0 0);
-  --secondary: oklch(0.5788 0.2316 259.6380);
-  --secondary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.5762 0.2175 258.9127);
+  --secondary-foreground: oklch(1.0000 0 0);
   --muted: oklch(0.9551 0 0);
   --muted-foreground: oklch(0.3211 0 0);
   --accent: oklch(0.5635 0.2408 260.8178);

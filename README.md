@@ -52,13 +52,6 @@ $ npm run dev
 $ npm run build
 
 ```
-### if using both github and git tea
-```
-git add .
-git commit -m "Your commit message"
-git push
-
-```
 
 # Deploy 
 ```
