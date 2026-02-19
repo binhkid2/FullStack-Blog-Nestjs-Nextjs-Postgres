@@ -70,8 +70,11 @@ export class AuthService {
   }
 
   private clearCookies(res: any) {
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const secure = this.configService.get<string>('COOKIE_SECURE') === 'true';
+    const domain = this.configService.get<string>('COOKIE_DOMAIN') || undefined;
+    const opts = { httpOnly: true, sameSite: 'lax' as const, secure, domain };
+    res.clearCookie('accessToken', opts);
+    res.clearCookie('refreshToken', opts);
   }
 
   private safeUser(user: User) {
