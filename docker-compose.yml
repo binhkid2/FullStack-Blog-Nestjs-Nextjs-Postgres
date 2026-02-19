@@ -47,6 +47,6 @@ services:
       UPLOAD_R2_WORKER_API: ${UPLOAD_R2_WORKER_API}
       R2_UPLOAD_API_KEY: ${R2_UPLOAD_API_KEY}
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "${FRONTEND_PORT}:3000"
     depends_on:
       - backend

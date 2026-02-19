@@ -11,5 +11,5 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=base /app/.next ./.next
 COPY --from=base /app/public ./public
-EXPOSE 5000
+EXPOSE 3000
 CMD ["npm", "start"]
