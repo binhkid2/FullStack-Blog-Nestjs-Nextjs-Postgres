@@ -22,7 +22,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Loader2, Pencil, Check, Users2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Pencil, Trash2, Check, Users2 } from "lucide-react";
 
 interface Props {
   initialUsers: User[];
@@ -55,9 +65,11 @@ function Avatar({ name, email }: { name?: string; email: string }) {
 export function UsersTable({ initialUsers }: Props) {
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<UserRole>(UserRole.MEMBER);
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const openEdit = (user: User) => {
     setEditingUser(user);
@@ -104,6 +116,21 @@ export function UsersTable({ initialUsers }: Props) {
       toast.error(err instanceof Error ? err.message : "Update failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingUser) return;
+    setDeleteLoading(true);
+    try {
+      await clientFetch(`/users/${deletingUser.id}`, { method: "DELETE" });
+      toast.success(`User "${deletingUser.email}" deleted.`);
+      setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
+      setDeletingUser(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -163,6 +190,15 @@ export function UsersTable({ initialUsers }: Props) {
                 onClick={() => openEdit(user)}
               >
                 <Pencil className="h-3.5 w-3.5" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setDeletingUser(user)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           );
@@ -257,6 +293,37 @@ export function UsersTable({ initialUsers }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* ── Delete confirmation dialog ────────────────────────────────────── */}
+      <AlertDialog open={!!deletingUser} onOpenChange={(o) => !o && setDeletingUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete{" "}
+              <span className="font-medium text-foreground">
+                {deletingUser?.name || deletingUser?.email}
+              </span>
+              . This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

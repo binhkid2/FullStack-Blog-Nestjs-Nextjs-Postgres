@@ -76,6 +76,11 @@ export class UsersService {
     return this.findById(id);
   }
 
+  async remove(id: string): Promise<void> {
+    await this.findById(id); // throws NotFoundException if not found
+    await this.userRepo.delete(id);
+  }
+
   async setPassword(id: string, password: string): Promise<void> {
     const hash = await bcrypt.hash(password, 12);
     await this.userRepo.update(id, { passwordHash: hash });

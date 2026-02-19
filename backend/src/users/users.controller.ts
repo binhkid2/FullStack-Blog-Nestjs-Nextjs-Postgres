@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -53,5 +54,11 @@ export class UsersController {
     const user = await this.usersService.updateRole(id, dto);
     const { passwordHash, ...safe } = user as any;
     return { success: true, user: safe };
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    await this.usersService.remove(id);
+    return { success: true };
   }
 }

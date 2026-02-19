@@ -69,15 +69,12 @@ export async function apiFetch<T = unknown>(
 
 // ─── Client-side fetch (use in Client Components) ─────────────────────────────
 
-export async function clientFetch<T = unknown>(
-  path: string,
-  init?: RequestInit
-): Promise<T> {
+async function doClientFetch(path: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   const needsCsrf = STATE_CHANGING_METHODS.includes(method);
   const csrfToken = needsCsrf ? getClientCsrfToken() : "";
 
-  const res = await fetch(`${API_URL}${path}`, {
+  return fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
     headers: {
@@ -86,6 +83,22 @@ export async function clientFetch<T = unknown>(
       ...(init?.headers as Record<string, string> | undefined),
     },
   });
+}
+
+export async function clientFetch<T = unknown>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  let res = await doClientFetch(path, init);
+
+  // Auto-refresh expired access token on 401, then retry once.
+  // Skip for /auth/ paths to avoid refresh loops.
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    const refreshRes = await doClientFetch("/auth/refresh", { method: "POST" });
+    if (refreshRes.ok) {
+      res = await doClientFetch(path, init);
+    }
+  }
 
   if (!res.ok) {
     let msg = `API error ${res.status}`;
