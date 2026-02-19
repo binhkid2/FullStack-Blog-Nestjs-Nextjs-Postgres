@@ -1,6 +1,6 @@
 
 # BackEnd
-## Backend init
+### init
 
 ```bash
 # 1. Set up PostgreSQL and fill in .env
@@ -17,7 +17,7 @@ npm run seed:admin
 npm run seed:posts
 ```
 
-## Compile and run Backend
+###  Compile and run 
 
 ```bash
 # development
@@ -30,7 +30,7 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-## Run tests in Backend
+### Run tests
 
 ```bash
 # unit tests
@@ -51,4 +51,11 @@ $ npm run dev
 # build,deploy
 $ npm run build
 
+```
+
+# Deploy 
+```
+docker compose down --volumes
+docker compose build --no-cache
+docker compose up --force-recreate
 ```
