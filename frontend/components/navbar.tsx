@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function Navbar() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, loading, logout } = useAuth();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -41,31 +41,35 @@ export function Navbar() {
             </Link>
           </Button>
 
-          {currentUser ? (
+          {!loading && (
             <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard">
-                  <LayoutDashboard className="h-4 w-4 mr-1" />
-                  <span className="hidden sm:inline">Dashboard</span>
-                </Link>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-destructive hover:text-destructive"
-              >
-                <LogOut className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">Logout</span>
-              </Button>
+              {currentUser ? (
+                <>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/dashboard">
+                      <LayoutDashboard className="h-4 w-4 mr-1" />
+                      <span className="hidden sm:inline">Dashboard</span>
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <LogOut className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">Logout</span>
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/auth">
+                    <LogIn className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">Sign In</span>
+                  </Link>
+                </Button>
+              )}
             </>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/auth">
-                <LogIn className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">Sign In</span>
-              </Link>
-            </Button>
           )}
         </nav>
       </div>

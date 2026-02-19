@@ -26,8 +26,6 @@ export class JwtAuthGuard {
     const token = this.extractToken(request);
 
     if (!token) {
-      const isHtmx = request.headers['hx-request'] === 'true';
-      if (isHtmx) throw new UnauthorizedException('Please log in to continue');
       throw new UnauthorizedException('Missing authentication token');
     }
 

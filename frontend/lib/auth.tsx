@@ -25,30 +25,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /** Decode the JWT access token stored in the browser cookie (non-httpOnly portion).
-   *  Since accessToken is httpOnly, we detect auth state by calling a lightweight
-   *  authenticated endpoint. If it returns 401 → not logged in. */
+  /** Calls GET /auth/me with the httpOnly cookie to restore the current user.
+   *  Returns the JWT payload if valid, clears auth state if 401. */
   const refresh = useCallback(async () => {
     try {
-      // Call GET /blog-posts?pageSize=1 — requires auth. If cookie is valid, returns data.
-      // We only care about the response headers/status here, not the body.
-      const data = await clientFetch<{
-        posts?: unknown[];
-        total?: number;
-        // The JWT payload fields we need come from the cookie;
-        // we parse them via a lightweight /auth/me-style endpoint.
-        // Since we don't have /auth/me, we use the blog-posts endpoint response
-        // and get user info from a separate call to /users (ADMIN only) or just
-        // decode what we need from the refresh token.
-        // Simpler: call GET /blog-posts and use the response to confirm auth,
-        // then store minimal info from localStorage if previously set.
-      }>(
-        "/blog-posts?pageSize=1"
+      const data = await clientFetch<{ success: boolean; user: CurrentUser }>(
+        "/auth/me"
       );
-      // Auth succeeded — try to restore user from sessionStorage
-      const cached = sessionStorage.getItem("currentUser");
-      if (cached) {
-        setCurrentUser(JSON.parse(cached));
+      if (data.user) {
+        const user: CurrentUser = {
+          sub: data.user.sub,
+          email: data.user.email,
+          role: (data.user.role as string).toUpperCase() as UserRole,
+          name: data.user.name,
+        };
+        setCurrentUser(user);
+        sessionStorage.setItem("currentUser", JSON.stringify(user));
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
