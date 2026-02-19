@@ -64,7 +64,10 @@ export class AuthService {
   private cookieOptions(res: any, accessToken: string, refreshToken: string) {
     const secure = this.configService.get<string>('COOKIE_SECURE') === 'true';
     const domain = this.configService.get<string>('COOKIE_DOMAIN') || undefined;
-    const opts = { httpOnly: true, sameSite: 'lax' as const, secure, domain };
+    // SameSite=none required for cross-subdomain requests (frontend ↔ backend on different subdomains)
+    // SameSite=none requires Secure=true
+    const sameSite = secure ? ('none' as const) : ('lax' as const);
+    const opts = { httpOnly: true, sameSite, secure, domain };
     res.cookie('accessToken', accessToken, { ...opts, maxAge: 15 * 60 * 1000 });
     res.cookie('refreshToken', refreshToken, { ...opts, maxAge: 7 * 24 * 60 * 60 * 1000 });
   }
@@ -72,7 +75,8 @@ export class AuthService {
   private clearCookies(res: any) {
     const secure = this.configService.get<string>('COOKIE_SECURE') === 'true';
     const domain = this.configService.get<string>('COOKIE_DOMAIN') || undefined;
-    const opts = { httpOnly: true, sameSite: 'lax' as const, secure, domain };
+    const sameSite = secure ? ('none' as const) : ('lax' as const);
+    const opts = { httpOnly: true, sameSite, secure, domain };
     res.clearCookie('accessToken', opts);
     res.clearCookie('refreshToken', opts);
   }

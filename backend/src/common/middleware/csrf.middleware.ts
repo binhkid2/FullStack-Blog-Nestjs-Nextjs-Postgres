@@ -25,10 +25,15 @@ export class CsrfMiddleware implements NestMiddleware {
     }
 
     // Set as non-httpOnly cookie so JS can read it
+    // SameSite=none required for cross-subdomain (frontend ↔ backend on different subdomains)
+    const secure = process.env.COOKIE_SECURE === 'true';
+    const domain = process.env.COOKIE_DOMAIN || undefined;
+    const sameSite = secure ? ('none' as const) : ('lax' as const);
     res.cookie('csrfToken', csrfToken, {
       httpOnly: false,
-      sameSite: 'lax',
-      secure: process.env.COOKIE_SECURE === 'true',
+      sameSite,
+      secure,
+      domain,
     });
 
     (req as any).csrfToken = csrfToken;
