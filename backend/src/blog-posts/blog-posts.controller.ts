@@ -7,10 +7,7 @@ import {
   Patch,
   Post,
   Query,
-  Req,
-  Res,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
 import { BlogPostsService } from './blog-posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -52,51 +49,6 @@ export class BlogPostsController {
     return { success: true };
   }
 
-  // ─── HTMX partials (public) ──────────────────────────────────────────────────
-
-  /**
-   * Renders the post-grid partial.
-   * Templates expect:
-   *   result  → { items, page, pageSize, total, totalPages }
-   *   query   → the raw query params (q, tags, category, sort, page, pageSize)
-   */
-  @Get('partials/grid')
-  @Public()
-  async gridPartial(@Query() query: ListPostsQueryDto, @Res() res: Response) {
-    const result = await this.blogPostsService.findPublished(query);
-    return res.render('partials/post-grid', {
-      result,
-      query: {
-        q: query.q || '',
-        tags: query.tags || '',
-        category: query.category || '',
-        sort: query.sort || 'newest',
-        page: result.page,
-        pageSize: result.pageSize,
-      },
-    });
-  }
-
-  // ─── HTMX partials (authenticated) ───────────────────────────────────────────
-
-  /**
-   * Renders the dashboard-post-table partial.
-   * Template expects: posts[], currentUser
-   */
-  @Get('partials/table')
-  async tablePartial(
-    @Query() query: ListPostsQueryDto,
-    @CurrentUser() currentUser: any,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    const data = await this.blogPostsService.findAll(query, currentUser);
-    return res.render('partials/dashboard-post-table', {
-      posts: data.posts,
-      currentUser,
-    });
-  }
-
   // ─── Authenticated CRUD ───────────────────────────────────────────────────────
 
   @Get()
@@ -106,40 +58,26 @@ export class BlogPostsController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  async create(@Body() dto: CreatePostDto, @CurrentUser() user: any, @Res() res: Response, @Req() req: Request) {
+  async create(@Body() dto: CreatePostDto, @CurrentUser() user: any) {
     const post = await this.blogPostsService.create(dto, user);
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      return res.render('partials/flash', { type: 'success', message: `Post "${post.title}" created!` });
-    }
-    return res.json({ success: true, post });
+    return { success: true, post };
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   async update(
     @Param('id') id: string,
     @Body() dto: UpdatePostDto,
     @CurrentUser() user: any,
-    @Res() res: Response,
-    @Req() req: Request,
   ) {
     const post = await this.blogPostsService.update(id, dto, user);
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      return res.render('partials/flash', { type: 'success', message: `Post "${post.title}" updated!` });
-    }
-    return res.json({ success: true, post });
+    return { success: true, post };
   }
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  async remove(@Param('id') id: string, @Res() res: Response, @Req() req: Request) {
+  async remove(@Param('id') id: string) {
     await this.blogPostsService.remove(id);
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      return res.render('partials/flash', { type: 'success', message: 'Post deleted.' });
-    }
-    return res.json({ success: true });
+    return { success: true };
   }
 }

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -82,6 +82,10 @@ export class AuthService {
     return safe;
   }
 
+  private get frontendUrl(): string {
+    return this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+  }
+
   // ─── Register ────────────────────────────────────────────────────────────────
 
   async register(dto: RegisterDto, req: any, res: any) {
@@ -102,11 +106,6 @@ export class AuthService {
     await this.storeRefreshToken(user.id, rawRefresh, req);
     this.cookieOptions(res, accessToken, refreshToken);
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      res.set('HX-Redirect', '/dashboard');
-      return res.render('partials/flash', { type: 'success', message: 'Welcome! Account created.' });
-    }
     return res.json({ success: true, accessToken, refreshToken, user: this.safeUser(user) });
   }
 
@@ -126,11 +125,6 @@ export class AuthService {
     await this.storeRefreshToken(user.id, rawRefresh, req);
     this.cookieOptions(res, accessToken, refreshToken);
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      res.set('HX-Redirect', '/dashboard');
-      return res.render('partials/flash', { type: 'success', message: `Welcome back, ${user.name || user.email}!` });
-    }
     return res.json({ success: true, accessToken, refreshToken, user: this.safeUser(user) });
   }
 
@@ -188,18 +182,13 @@ export class AuthService {
       await this.refreshTokenRepo.update({ tokenHash }, { revokedAt: new Date() });
     }
     this.clearCookies(res);
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      res.set('HX-Redirect', '/');
-      return res.render('partials/flash', { type: 'success', message: 'Logged out successfully' });
-    }
     return res.json({ success: true });
   }
 
   // ─── Magic Link ───────────────────────────────────────────────────────────────
 
   async requestMagicLink(email: string, req: any, res: any) {
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3001';
     const ttl = this.configService.get<number>('MAGIC_LINK_TTL_MINUTES') || 20;
 
     const user = await this.userRepo.findOne({ where: { email } });
@@ -217,6 +206,7 @@ export class AuthService {
       }),
     );
 
+    // Link points to backend verify endpoint which then redirects to frontend
     const link = `${appUrl}/auth/magic-link/verify?token=${rawToken}`;
 
     await sendMail({
@@ -225,10 +215,6 @@ export class AuthService {
       html: `<p>Click <a href="${link}">here</a> to sign in. Link expires in ${ttl} minutes.</p><p>${link}</p>`,
     });
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) {
-      return res.render('partials/flash', { type: 'success', message: 'Magic link sent! Check your email.' });
-    }
     return res.json({ success: true, message: 'Magic link sent' });
   }
 
@@ -243,7 +229,6 @@ export class AuthService {
     record.consumedAt = new Date();
     await this.magicLinkRepo.save(record);
 
-    // Find or create user
     let user = await this.userRepo.findOne({ where: { email: record.email } });
     if (!user) {
       user = this.userRepo.create({
@@ -259,20 +244,19 @@ export class AuthService {
     await this.storeRefreshToken(user.id, rawRefresh, req);
     this.cookieOptions(res, accessToken, refreshToken);
 
-    return res.redirect('/dashboard');
+    // Redirect to Next.js frontend dashboard
+    return res.redirect(`${this.frontendUrl}/dashboard`);
   }
 
   // ─── Password Reset ───────────────────────────────────────────────────────────
 
   async requestPasswordReset(email: string, req: any, res: any) {
-    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const frontendUrl = this.frontendUrl;
     const ttl = this.configService.get<number>('PASSWORD_RESET_TTL_MINUTES') || 30;
 
     const user = await this.userRepo.findOne({ where: { email } });
     if (!user) {
       // Return success to avoid enumeration
-      const isHtmx = req.headers['hx-request'] === 'true';
-      if (isHtmx) return res.render('partials/flash', { type: 'success', message: 'If that email exists, a reset link was sent.' });
       return res.json({ success: true });
     }
 
@@ -284,15 +268,14 @@ export class AuthService {
       this.pwdResetRepo.create({ id: uuidv4(), userId: user.id, tokenHash, expiresAt }),
     );
 
-    const link = `${appUrl}/auth?tab=reset&token=${rawToken}`;
+    // Link points to Next.js frontend auth page with reset token
+    const link = `${frontendUrl}/auth?tab=reset&token=${rawToken}`;
     await sendMail({
       to: email,
       subject: 'Password Reset',
       html: `<p>Click <a href="${link}">here</a> to reset your password. Expires in ${ttl} minutes.</p>`,
     });
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) return res.render('partials/flash', { type: 'success', message: 'Reset link sent!' });
     return res.json({ success: true });
   }
 
@@ -313,8 +296,6 @@ export class AuthService {
     record.consumedAt = new Date();
     await this.pwdResetRepo.save(record);
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-    if (isHtmx) return res.render('partials/flash', { type: 'success', message: 'Password updated! You can now log in.' });
     return res.json({ success: true });
   }
 
@@ -332,7 +313,6 @@ export class AuthService {
     if (oauthAccount) {
       user = oauthAccount.user;
     } else {
-      // Find or create user by email
       user = await this.userRepo.findOne({ where: { email } });
       if (!user) {
         user = this.userRepo.create({
@@ -358,7 +338,8 @@ export class AuthService {
     await this.storeRefreshToken(user.id, rawRefresh, req);
     this.cookieOptions(res, accessToken, refreshToken);
 
-    return res.redirect('/dashboard');
+    // Redirect to Next.js frontend dashboard after Google OAuth
+    return res.redirect(`${this.frontendUrl}/dashboard`);
   }
 
   // ─── Private ──────────────────────────────────────────────────────────────────

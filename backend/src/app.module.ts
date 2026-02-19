@@ -12,7 +12,6 @@ import { CsrfMiddleware } from './common/middleware/csrf.middleware';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { BlogPostsModule } from './blog-posts/blog-posts.module';
-import { PagesModule } from './pages/pages.module';
 import { TokensModule } from './tokens/tokens.module';
 
 import { User } from './users/entities/user.entity';
@@ -58,7 +57,6 @@ import { OAuthAccount } from './tokens/entities/oauth-account.entity';
     AuthModule,
     UsersModule,
     BlogPostsModule,
-    PagesModule,
     TokensModule,
   ],
   providers: [

@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -14,7 +14,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const req = ctx.getRequest<Request>();
     const res = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -37,15 +36,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(exception.message, exception.stack);
     }
 
-    const isHtmx = req.headers['hx-request'] === 'true';
-
-    if (isHtmx) {
-      res.status(status).render('partials/flash', { type: 'error', message });
-    } else {
-      res.status(status).json({
-        success: false,
-        error: { code: status, message },
-      });
-    }
+    res.status(status).json({
+      success: false,
+      error: { code: status, message },
+    });
   }
 }
