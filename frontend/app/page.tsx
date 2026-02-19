@@ -116,7 +116,7 @@ export default async function HomePage({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
             <h1 className="text-3xl font-bold tracking-tight">
-              Practical Engineering Stories
+              The blog is all about web dev tech
             </h1>
             <p className="mt-2 text-muted-foreground">
               Fast backend patterns, frontend craft, and product lessons from
